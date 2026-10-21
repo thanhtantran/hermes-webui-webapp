@@ -1,0 +1,8 @@
+{
+  "name": "Hermes WebUI Mobile App",
+  "description": "Mobile web app for managing and connecting to Hermes server instances with saved credentials and auto-login.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Hermes WebUI Mobile App</title>
+    <meta name="description" content="Mobile web app for managing and connecting to Hermes server instances with saved credentials and auto-login." />
+    <meta property="og:title" content="Hermes WebUI Mobile App" />
+    <meta property="og:description" content="Mobile web app for managing and connecting to Hermes server instances with saved credentials and auto-login." />
+    <meta name="theme-color" content="#090d16" />
+
+    <!-- Google Fonts: JetBrains Mono with explicit Vietnamese support -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&subset=vietnamese,latin,latin-ext&display=swap" rel="stylesheet" />
+    <!-- Initial Theme Setup -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('hermes_theme');
+          if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else {
+            document.documentElement.classList.add('dark');
+          }
+        } catch(e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+  </head>
+  <body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased min-h-screen selection:bg-cyan-500/30 selection:text-cyan-600 dark:selection:text-cyan-200 transition-colors duration-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
