@@ -4,6 +4,8 @@ export const translations = {
   en: {
     appTitle: 'HERMES CONSOLE',
     appSubtitle: 'Authenticated multi-server management & status monitor',
+    footerCopyright: 'Copyright 2026 - HERMES.UI - Design for',
+    footerPoweredBy: 'Powered by',
     loginTitle: 'SIGN IN TO HERMES CONSOLE',
     loginSubtitle: 'Use your Google account to access the Hermes instances saved to your account.',
     loginBenefitAccounts: 'Each Google account gets an isolated instance list on this server.',
@@ -94,6 +96,8 @@ export const translations = {
   vi: {
     appTitle: 'BẢNG ĐIỀU KHIỂN HERMES',
     appSubtitle: 'Quản trị đa máy chủ & giám sát trạng thái (có xác thực)',
+    footerCopyright: 'Bản quyền 2026 - HERMES.UI - Thiết kế cho',
+    footerPoweredBy: 'Được phát triển bởi',
     loginTitle: 'ĐĂNG NHẬP HERMES CONSOLE',
     loginSubtitle: 'Đăng nhập bằng tài khoản Google để truy cập các instance Hermes đã lưu trong tài khoản của bạn.',
     loginBenefitAccounts: 'Mỗi tài khoản Google có danh sách instance riêng trên máy chủ này.',

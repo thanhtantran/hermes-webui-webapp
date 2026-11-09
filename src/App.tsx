@@ -5,6 +5,7 @@ import { UrlCard } from './components/UrlCard';
 import { UrlModal } from './components/UrlModal';
 import { BackupModal } from './components/BackupModal';
 import { LoginScreen } from './components/LoginScreen';
+import { Footer } from './components/Footer';
 import {
   AuthUser,
   HermesURL,
@@ -442,9 +443,7 @@ export default function App() {
 
       {/* Terminal Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-950/80 py-3 px-4 text-center text-[11px] text-slate-500">
-        <p className="font-mono">
-          HERMES.UI CONSOLE · AUTHENTICATED ACCESS
-        </p>
+        <Footer currentLang={currentLang} />
       </footer>
 
       {/* Add / Edit Modal */}

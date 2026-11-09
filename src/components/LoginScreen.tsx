@@ -13,6 +13,7 @@ import type { AuthUser, Language, Theme } from '../types';
 import { getAuthConfig, loginWithGoogle } from '../utils/api';
 import { getGoogleIdentity, loadGoogleIdentity } from '../utils/google';
 import { translations } from '../utils/i18n';
+import { Footer } from './Footer';
 
 interface LoginScreenProps {
   currentLang: Language;
@@ -258,9 +259,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </div>
           </div>
 
-          <p className="text-center text-[10px] text-slate-500 dark:text-slate-500 mt-4">
-            HERMES.UI CONSOLE · AUTHENTICATED ACCESS
-          </p>
+          <div className="text-center text-[10px] text-slate-500 dark:text-slate-500 mt-4">
+            <Footer currentLang={currentLang} />
+          </div>
         </div>
       </main>
     </div>
