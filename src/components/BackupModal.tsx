@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { X, Download, Upload, Copy, Check, AlertCircle, Database } from 'lucide-react';
-import { HermesURL, Language } from '../types';
-import { exportUrlsAsJson, importUrlsFromJson } from '../utils/storage';
+import { X, Download, Upload, Copy, Check, AlertCircle, Database, Loader2, ShieldCheck } from 'lucide-react';
+import { HermesURL, ImportInstanceInput, Language } from '../types';
+import { exportInstancesAsJson, parseImportPayload } from '../utils/storage';
 import { translations } from '../utils/i18n';
 
 interface BackupModalProps {
   isOpen: boolean;
   onClose: () => void;
   urls: HermesURL[];
-  onImport: (imported: HermesURL[]) => void;
+  onImport: (imported: ImportInstanceInput[]) => Promise<void>;
   currentLang: Language;
 }
 
@@ -23,11 +23,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
   const [importText, setImportText] = useState('');
   const [copied, setCopied] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const exportData = exportUrlsAsJson(urls);
+  const exportData = exportInstancesAsJson(urls);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(exportData);
@@ -47,22 +48,25 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleImportSubmit = () => {
+  const handleImportSubmit = async () => {
     setError(null);
     if (!importText.trim()) {
       setError(currentLang === 'vi' ? 'Vui lòng dán nội dung JSON để nhập' : 'Please paste a valid JSON string');
       return;
     }
     try {
-      const imported = importUrlsFromJson(importText.trim());
+      const imported = parseImportPayload(importText.trim());
       if (imported.length === 0) {
         setError(currentLang === 'vi' ? 'Không tìm thấy máy chủ hợp lệ nào' : 'No valid servers discovered in payload');
         return;
       }
-      onImport(imported);
+      setIsImporting(true);
+      await onImport(imported);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || (currentLang === 'vi' ? 'Lỗi cú pháp JSON' : 'JSON Syntax Error'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (currentLang === 'vi' ? 'Lỗi cú pháp JSON' : 'JSON Syntax Error'));
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -124,6 +128,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 rows={6}
                 className="w-full p-2.5 font-mono text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-800 dark:text-slate-300 resize-none focus:outline-hidden"
               />
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3 h-3 shrink-0" />
+                <span>{t.backupNoPasswords}</span>
+              </p>
               <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={handleCopy}
@@ -161,10 +169,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               />
               <button
                 onClick={handleImportSubmit}
-                className="w-full py-2 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                disabled={isImporting}
+                className="w-full py-2 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-60"
               >
-                <Upload className="w-3.5 h-3.5" />
-                <span>{t.importBtn}</span>
+                {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                <span>{isImporting ? t.loadingInstances : t.importBtn}</span>
               </button>
             </div>
           )}

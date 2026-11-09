@@ -119,7 +119,7 @@ export const UrlCard: React.FC<UrlCardProps> = ({
 
           {/* Credentials and metadata indicators */}
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            {item.saveCredentials ? (
+            {item.hasPassword ? (
               <span className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-200 dark:border-cyan-500/20">
                 <Key className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
                 <span>{t.credentialsSaved}</span>

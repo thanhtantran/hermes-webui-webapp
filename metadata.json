@@ -1,8 +1,6 @@
 {
-  "name": "Hermes WebUI Mobile App",
-  "description": "Mobile web app for managing and connecting to Hermes server instances with saved credentials and auto-login.",
+  "name": "Hermes WebUI Console",
+  "description": "Authenticated web console for managing and connecting to Hermes WebUI instances with Google sign-in and server-side encrypted credentials.",
   "permissions": [],
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "capabilities": []
 }

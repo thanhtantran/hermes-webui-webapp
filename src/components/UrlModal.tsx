@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Eye, EyeOff, Key, Link2, Terminal } from 'lucide-react';
-import { HermesURL, Language } from '../types';
+import { X, Eye, EyeOff, KeyRound, Link2, Loader2, Terminal } from 'lucide-react';
+import { HermesURL, InstanceInput, Language } from '../types';
 import { translations } from '../utils/i18n';
 
 interface UrlModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<HermesURL, 'id'>, id?: string) => void;
+  onSave: (data: InstanceInput, id?: string) => Promise<void>;
   editingItem: HermesURL | null;
   currentLang: Language;
 }
@@ -22,29 +22,31 @@ export const UrlModal: React.FC<UrlModalProps> = ({
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [password, setPassword] = useState('');
-  const [saveCredentials, setSaveCredentials] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [clearPassword, setClearPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (editingItem) {
       setName(editingItem.name);
       setUrl(editingItem.url);
-      setPassword(editingItem.password || '');
-      setSaveCredentials(editingItem.saveCredentials);
+      setPassword('');
+      setClearPassword(false);
     } else {
       setName('');
       setUrl('');
       setPassword('');
-      setSaveCredentials(false);
+      setClearPassword(false);
     }
     setError(null);
     setShowPassword(false);
+    setSubmitting(false);
   }, [editingItem, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -70,15 +72,25 @@ export const UrlModal: React.FC<UrlModalProps> = ({
       return;
     }
 
-    onSave(
-      {
-        name: name.trim(),
-        url: trimmedUrl,
-        password: saveCredentials ? password : '',
-        saveCredentials,
-      },
-      editingItem?.id
-    );
+    const payload: InstanceInput = {
+      name: name.trim(),
+      url: trimmedUrl,
+    };
+
+    if (clearPassword && editingItem?.hasPassword) {
+      payload.password = '';
+    } else if (password) {
+      payload.password = password;
+    }
+
+    setSubmitting(true);
+    try {
+      await onSave(payload, editingItem?.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save instance.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -146,66 +158,72 @@ export const UrlModal: React.FC<UrlModalProps> = ({
             </p>
           </div>
 
-          {/* Save Credentials Checkbox */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80">
-            <label className="flex items-start gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={saveCredentials}
-                onChange={(e) => setSaveCredentials(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-cyan-600 dark:text-cyan-500 focus:ring-cyan-500 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 cursor-pointer"
-              />
-              <div>
-                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-                  {t.saveCredsLabel}
-                </span>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {t.saveCredsDesc}
-                </p>
-              </div>
+          {/* Password (encrypted server-side) */}
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+              {t.passwordLabel}
             </label>
-          </div>
-
-          {/* Password Input (conditional) */}
-          {saveCredentials && (
-            <div className="pl-6 pt-1 space-y-1">
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                {t.passwordLabel}
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t.passwordPlaceholder}
-                  className="w-full px-3 py-2 pr-9 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 text-xs focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
-                >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                disabled={clearPassword}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t.passwordPlaceholder}
+                className="w-full px-3 py-2 pr-9 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 text-xs focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
             </div>
-          )}
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-1.5">
+              <KeyRound className="w-3 h-3 mt-0.5 shrink-0 text-cyan-600 dark:text-cyan-400" />
+              <span>{t.passwordHelp}</span>
+            </p>
+
+            {editingItem?.hasPassword && (
+              <div className="pt-1 space-y-1.5">
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                  {t.passwordKeepHint}
+                </p>
+                <label className="flex items-start gap-2 cursor-pointer select-none text-[11px] text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={clearPassword}
+                    onChange={(e) => setClearPassword(e.target.checked)}
+                    className="mt-0.5 w-3.5 h-3.5 rounded text-rose-600 focus:ring-rose-500 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 cursor-pointer"
+                  />
+                  <span>
+                    <span className="font-semibold">{t.clearStoredPassword}</span>
+                    {' — '}
+                    {t.clearStoredPasswordHint}
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
 
           {/* Modal Footer */}
           <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-200 dark:border-slate-800/80">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-mono font-medium transition-colors cursor-pointer"
+              disabled={submitting}
+              className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-mono font-medium transition-colors cursor-pointer disabled:opacity-50"
             >
               {t.btnCancel}
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 text-xs font-mono font-bold shadow-xs transition-colors cursor-pointer"
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 text-xs font-mono font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
             >
-              {editingItem ? t.btnSave : t.btnAdd}
+              {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{editingItem ? t.btnSave : t.btnAdd}</span>
             </button>
           </div>
         </form>

@@ -1,30 +1,38 @@
 {
-  "name": "hermes-webui-mobile-app",
+  "name": "hermes-webui-console",
+  "description": "Authenticated web console for managing Hermes WebUI instances hosted on local servers or VPS machines.",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "tsc -b && vite build",
-    "start": "node server.ts",
-    "lint": "tsc -b",
+    "build": "tsc --noEmit && vite build",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
+    "lint": "tsc --noEmit",
+    "keygen": "node scripts/generate-keys.mjs",
     "preview": "vite preview --port 3000"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^3.1.1",
-    "@types/express": "^5.0.6",
     "clsx": "^2.1.1",
+    "cookie-parser": "^1.4.7",
+    "cross-env": "^10.1.0",
     "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
+    "google-auth-library": "^11.3.3",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-native-web": "^0.21.4",
     "tailwind-merge": "^3.0.2",
     "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.9",
-    "@types/node": "^22.13.4",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",

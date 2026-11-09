@@ -18,6 +18,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { HermesURL, ViewportMode, Language, Theme } from '../types';
+import { revealPassword } from '../utils/api';
 import { translations } from '../utils/i18n';
 
 interface WebViewScreenProps {
@@ -40,6 +41,8 @@ export const WebViewScreen: React.FC<WebViewScreenProps> = ({
   const [iframeKey, setIframeKey] = useState<number>(Date.now());
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<ViewportMode>('mobile');
   // Use proxy bypass by default so X-Frame-Options is stripped
   const [useProxyBypass, setUseProxyBypass] = useState(true);
@@ -48,21 +51,36 @@ export const WebViewScreen: React.FC<WebViewScreenProps> = ({
   // Determine iframe source URL: either through backend proxy or direct
   const iframeSource = useMemo(() => {
     if (useProxyBypass) {
-      return `/api/proxy?url=${encodeURIComponent(urlData.url)}`;
+      return `/api/proxy?instanceId=${encodeURIComponent(urlData.id)}`;
     }
     return urlData.url;
-  }, [useProxyBypass, urlData.url]);
+  }, [useProxyBypass, urlData.id, urlData.url]);
 
   const handleReload = () => {
     setIsLoading(true);
     setIframeKey(Date.now());
   };
 
-  const copyPassword = () => {
-    if (!urlData.password) return;
-    navigator.clipboard.writeText(urlData.password);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyPassword = async () => {
+    if (!urlData.hasPassword || copying) return;
+    setCopying(true);
+    setCopyError(null);
+    try {
+      const password = await revealPassword(urlData.id);
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      setCopyError(
+        err instanceof Error
+          ? err.message
+          : currentLang === 'vi'
+            ? 'Không thể lấy mật khẩu từ máy chủ.'
+            : 'Could not retrieve the password from the server.'
+      );
+    } finally {
+      setCopying(false);
+    }
   };
 
   useEffect(() => {
@@ -179,13 +197,18 @@ export const WebViewScreen: React.FC<WebViewScreenProps> = ({
           </div>
 
           {/* Copy Password Button (if saved) */}
-          {urlData.saveCredentials && urlData.password && (
+          {urlData.hasPassword && (
             <button
               onClick={copyPassword}
               className="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 border border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-400 text-xs font-mono font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Copy saved password to clipboard"
             >
-              {copied ? (
+              {copying ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+                  <span>{t.loadingInstances}</span>
+                </>
+              ) : copied ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span>{t.copiedShort}</span>
@@ -208,7 +231,7 @@ export const WebViewScreen: React.FC<WebViewScreenProps> = ({
             <RotateCw className="w-3.5 h-3.5" />
           </button>
 
-          {/* Open as Standalone App Window (React Native Equivalent) */}
+          {/* Open as Standalone App Window */}
           <button
             onClick={() => {
               const width = 430;
@@ -244,19 +267,20 @@ export const WebViewScreen: React.FC<WebViewScreenProps> = ({
       {/* Auto-login & Credential info strip */}
       <div className="bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 px-4 py-1.5 text-xs flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          {urlData.saveCredentials ? (
+          {urlData.hasPassword ? (
             <span className="inline-flex items-center gap-1 text-cyan-700 dark:text-cyan-400 text-[11px]">
               <Lock className="w-3 h-3" />
               {t.autoLoginReady}
-              {urlData.password && (
-                <span className="text-slate-500 text-[10px] ml-1">
-                  (••••••••)
-                </span>
-              )}
+              <span className="text-slate-500 text-[10px] ml-1">(ENC/DEC · SERVER)</span>
             </span>
           ) : (
             <span className="text-slate-500 text-[11px]">
               {t.noCredsSession}
+            </span>
+          )}
+          {copyError && (
+            <span className="text-rose-600 dark:text-rose-400 text-[10px] max-w-[240px] truncate" title={copyError}>
+              {copyError}
             </span>
           )}
         </div>
@@ -334,7 +358,7 @@ export const WebViewScreen: React.FC<WebViewScreenProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-              {urlData.saveCredentials && urlData.password && (
+              {urlData.hasPassword && (
                 <button
                   onClick={copyPassword}
                   className="flex-1 sm:flex-none px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-mono transition-colors flex items-center justify-center gap-1 cursor-pointer border border-slate-300 dark:border-slate-700"

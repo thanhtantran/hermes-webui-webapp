@@ -5,12 +5,17 @@ import { UrlCard } from './components/UrlCard';
 import { UrlModal } from './components/UrlModal';
 import { WebViewScreen } from './components/WebViewScreen';
 import { BackupModal } from './components/BackupModal';
-import { HermesURL, PingResult, Language, Theme } from './types';
+import { LoginScreen } from './components/LoginScreen';
 import {
-  loadStoredUrls,
-  saveStoredUrls,
-} from './utils/storage';
-import { pingServerUrl } from './utils/ping';
+  AuthUser,
+  HermesURL,
+  ImportInstanceInput,
+  InstanceInput,
+  PingResult,
+  Language,
+  Theme,
+} from './types';
+import * as api from './utils/api';
 import {
   getStoredLanguage,
   saveStoredLanguage,
@@ -21,9 +26,18 @@ import {
 import {
   Server,
   Plus,
+  Loader2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
+type AuthState = 'loading' | 'anonymous' | 'authenticated';
+
 export default function App() {
+  const [authState, setAuthState] = useState<AuthState>('loading');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loginNotice, setLoginNotice] = useState<string | null>(null);
+
   const [urls, setUrls] = useState<HermesURL[]>([]);
   const [activeUrl, setActiveUrl] = useState<HermesURL | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,6 +46,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentLang, setCurrentLang] = useState<Language>(getStoredLanguage);
   const [currentTheme, setCurrentTheme] = useState<Theme>(getStoredTheme);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [appError, setAppError] = useState<string | null>(null);
 
   // Ping status tracking
   const [pingResults, setPingResults] = useState<Record<string, PingResult>>({});
@@ -39,6 +55,10 @@ export default function App() {
   const [lastCheckedTime, setLastCheckedTime] = useState<number | null>(null);
 
   const t = translations[currentLang];
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   // Sync theme with document class and meta tag
   useEffect(() => {
@@ -58,47 +78,91 @@ export default function App() {
     saveStoredTheme(nextTheme);
   };
 
-  // Load URLs from storage on startup (clean any demo presets for production release)
+  // Probe the existing session once on startup (silent on 401)
   useEffect(() => {
-    const loaded = loadStoredUrls();
-    const cleaned = loaded.filter(
-      (u) => u.id !== 'demo-orangepi' && u.url !== 'https://hermes.orangepi.vn'
-    );
-    if (cleaned.length !== loaded.length) {
-      saveStoredUrls(cleaned);
-    }
-    setUrls(cleaned);
+    let cancelled = false;
+    api
+      .getMe(true)
+      .then((auth) => {
+        if (cancelled) return;
+        api.setCsrfToken(auth.csrfToken);
+        setUser(auth.user);
+        setAuthState('authenticated');
+      })
+      .catch(() => {
+        if (!cancelled) setAuthState('anonymous');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Clear client state as soon as the server rejects the session
+  useEffect(() => {
+    const handleExpired = () => {
+      api.setCsrfToken(null);
+      setAuthState('anonymous');
+      setUser(null);
+      setUrls([]);
+      setPingResults({});
+      setActiveUrl(null);
+      setIsModalOpen(false);
+      setIsBackupOpen(false);
+      setIsPingingAll(false);
+      setLoginNotice(t.sessionExpired);
+    };
+    window.addEventListener('hermes:session-expired', handleExpired);
+    return () => window.removeEventListener('hermes:session-expired', handleExpired);
+  }, [t.sessionExpired]);
 
   const handleToggleLanguage = (newLang: Language) => {
     setCurrentLang(newLang);
     saveStoredLanguage(newLang);
   };
 
-  const handleSaveUrls = (newUrls: HermesURL[]) => {
-    setUrls(newUrls);
-    saveStoredUrls(newUrls);
-  };
+  const refreshInstances = useCallback(async (): Promise<HermesURL[]> => {
+    setIsLoadingData(true);
+    try {
+      const list = await api.listInstances();
+      setUrls(list);
+      setAppError(null);
+      return list;
+    } catch (err) {
+      setAppError(err instanceof Error ? err.message : tRef.current.requestFailed);
+      return [];
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
 
-  // Ping a single server
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    void refreshInstances();
+  }, [authState, refreshInstances]);
+
+  // Ping a single server via the authenticated server-side probe
   const handlePingSingle = useCallback(async (item: HermesURL) => {
     setPingResults((prev) => ({
       ...prev,
       [item.id]: { status: 'checking' },
     }));
 
-    const result = await pingServerUrl(item.url);
-
-    setPingResults((prev) => ({
-      ...prev,
-      [item.id]: {
-        status: result.isOnline ? 'online' : 'offline',
-        latencyMs: result.latencyMs,
-        lastCheckedAt: Date.now(),
-        statusCode: result.statusCode,
-        error: result.error,
-      },
-    }));
+    try {
+      const result = await api.pingInstance(item.id);
+      setPingResults((prev) => ({
+        ...prev,
+        [item.id]: api.toPingResult(result),
+      }));
+    } catch (err) {
+      setPingResults((prev) => ({
+        ...prev,
+        [item.id]: {
+          status: 'offline',
+          lastCheckedAt: Date.now(),
+          error: err instanceof Error ? err.message : 'Ping failed',
+        },
+      }));
+    }
   }, []);
 
   // Ping all servers concurrently
@@ -117,21 +181,23 @@ export default function App() {
       return next;
     });
 
-    const pingPromises = listToPing.map(async (u) => {
-      const res = await pingServerUrl(u.url);
-      return {
-        id: u.id,
-        pingResult: {
-          status: (res.isOnline ? 'online' : 'offline') as 'online' | 'offline',
-          latencyMs: res.latencyMs,
-          lastCheckedAt: Date.now(),
-          statusCode: res.statusCode,
-          error: res.error,
-        },
-      };
-    });
-
-    const results = await Promise.all(pingPromises);
+    const results = await Promise.all(
+      listToPing.map(async (u) => {
+        try {
+          const res = await api.pingInstance(u.id);
+          return { id: u.id, pingResult: api.toPingResult(res) };
+        } catch (err) {
+          return {
+            id: u.id,
+            pingResult: {
+              status: 'offline' as const,
+              lastCheckedAt: Date.now(),
+              error: err instanceof Error ? err.message : 'Ping failed',
+            },
+          };
+        }
+      })
+    );
 
     setPingResults((prev) => {
       const next = { ...prev };
@@ -151,25 +217,56 @@ export default function App() {
     pingAllRef.current = handlePingAll;
   }, [handlePingAll]);
 
-  // Auto-ping on initial load once URLs are populated
+  // Auto-ping on initial load once instances are populated
   const hasInitialPingRun = useRef(false);
   useEffect(() => {
-    if (urls.length > 0 && !hasInitialPingRun.current) {
+    if (authState === 'authenticated' && urls.length > 0 && !hasInitialPingRun.current) {
       hasInitialPingRun.current = true;
-      handlePingAll(urls);
+      void handlePingAll(urls);
     }
-  }, [urls, handlePingAll]);
+  }, [authState, urls, handlePingAll]);
 
-  // Periodic polling every 30 seconds
+  // Periodic polling every 30 seconds while signed in
   useEffect(() => {
+    if (authState !== 'authenticated') return;
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        pingAllRef.current();
+        void pingAllRef.current();
       }
     }, 30000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [authState]);
+
+  const handleAuthenticated = (authUser: AuthUser, csrfToken: string) => {
+    api.setCsrfToken(csrfToken);
+    setUser(authUser);
+    setLoginNotice(null);
+    setAppError(null);
+    setAuthState('authenticated');
+    hasInitialPingRun.current = false;
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Session may already be invalid on the server.
+    }
+    api.setCsrfToken(null);
+    setAuthState('anonymous');
+    setUser(null);
+    setUrls([]);
+    setPingResults({});
+    setLastCheckedTime(null);
+    setActiveUrl(null);
+    setIsModalOpen(false);
+    setIsBackupOpen(false);
+    setSearchQuery('');
+    setLoginNotice(null);
+    setAppError(null);
+    hasInitialPingRun.current = false;
+  };
 
   const handleOpenAdd = () => {
     setEditingItem(null);
@@ -181,52 +278,72 @@ export default function App() {
     setIsModalOpen(true);
   };
 
-  const handleSaveModal = (data: Omit<HermesURL, 'id'>, id?: string) => {
+  const handleSaveModal = async (data: InstanceInput, id?: string) => {
     if (id) {
-      const updated = urls.map((u) => (u.id === id ? { ...u, ...data } : u));
-      handleSaveUrls(updated);
-      const target = updated.find((u) => u.id === id);
-      if (target) handlePingSingle(target);
+      const updated = await api.updateInstance(id, data);
+      setUrls((prev) => prev.map((u) => (u.id === id ? updated : u)));
+      void handlePingSingle(updated);
     } else {
-      const newItem: HermesURL = {
-        id: `hermes-${Date.now()}`,
-        ...data,
-        createdAt: Date.now(),
-      };
-      const updated = [...urls, newItem];
-      handleSaveUrls(updated);
-      handlePingSingle(newItem);
+      const created = await api.createInstance(data);
+      setUrls((prev) => [...prev, created]);
+      void handlePingSingle(created);
     }
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    const remaining = urls.filter((u) => u.id !== id);
-    handleSaveUrls(remaining);
-    setPingResults((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteInstance(id);
+      setUrls((prev) => prev.filter((u) => u.id !== id));
+      setPingResults((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } catch (err) {
+      setAppError(err instanceof Error ? err.message : t.requestFailed);
+    }
   };
 
-  const handleConnect = (item: HermesURL) => {
-    const updated = urls.map((u) =>
-      u.id === item.id ? { ...u, lastConnectedAt: Date.now() } : u
+  const handleConnect = async (item: HermesURL) => {
+    try {
+      const updated = await api.connectInstance(item.id);
+      setUrls((prev) => prev.map((u) => (u.id === item.id ? updated : u)));
+      setActiveUrl(updated);
+    } catch (err) {
+      setAppError(err instanceof Error ? err.message : t.requestFailed);
+    }
+  };
+
+  const handleImportSuccess = async (imported: ImportInstanceInput[]) => {
+    const result = await api.importInstances(imported);
+    setUrls(result.instances);
+    setAppError(null);
+    void handlePingAll(result.instances);
+  };
+
+  if (authState === 'loading') {
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center gap-3 font-mono transition-colors">
+        <Loader2 className="w-7 h-7 text-cyan-500 animate-spin" />
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t.loadingConsole}</p>
+      </div>
     );
-    handleSaveUrls(updated);
-    setActiveUrl(item);
-  };
+  }
 
-  const handleImportSuccess = (imported: HermesURL[]) => {
-    const existingUrlsMap = new Map(urls.map((u) => [u.url, u]));
-    imported.forEach((item) => {
-      existingUrlsMap.set(item.url, item);
-    });
-    const merged = Array.from(existingUrlsMap.values());
-    handleSaveUrls(merged);
-    handlePingAll(merged);
-  };
+  if (authState === 'anonymous' || !user) {
+    return (
+      <LoginScreen
+        currentLang={currentLang}
+        currentTheme={currentTheme}
+        onToggleLanguage={handleToggleLanguage}
+        onToggleTheme={handleToggleTheme}
+        onAuthenticated={handleAuthenticated}
+        notice={loginNotice}
+        onDismissNotice={() => setLoginNotice(null)}
+      />
+    );
+  }
 
   // If connected to a server instance, render WebView Session Screen
   if (activeUrl) {
@@ -258,68 +375,93 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
         onOpenAddModal={handleOpenAdd}
         onOpenBackupModal={() => setIsBackupOpen(true)}
+        user={user}
+        onLogout={handleLogout}
       />
 
       {/* Main Terminal Workspace */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 sm:px-6">
-        {/* Telemetry & Search Toolbar */}
-        <Toolbar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onPingAll={() => handlePingAll()}
-          isPingingAll={isPingingAll}
-          lastCheckedTime={lastCheckedTime}
-          urls={urls}
-          pingResults={pingResults}
-          currentLang={currentLang}
-        />
+        {appError && (
+          <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="flex-1">{appError}</span>
+            <button
+              onClick={() => setAppError(null)}
+              className="p-0.5 hover:text-rose-900 dark:hover:text-rose-100 cursor-pointer"
+              aria-label={t.dismiss}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
-        {/* Server Endpoint Grid / List */}
-        {filteredUrls.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-10 text-center shadow-xs">
-            <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto mb-3 shadow-xs">
-              <Server className="w-6 h-6 stroke-[1.8]" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 tracking-wider uppercase">
-              {searchQuery ? t.noSearchMatch : t.noServersTitle}
-            </h3>
-            <p className="text-slate-500 dark:text-slate-400 text-xs max-w-md mx-auto mb-5 leading-relaxed">
-              {searchQuery
-                ? `${t.noSearchMatch}: "${searchQuery}"`
-                : t.noServersDesc}
-            </p>
-            <div className="flex items-center justify-center">
-              <button
-                onClick={handleOpenAdd}
-                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>{t.addFirstServer}</span>
-              </button>
-            </div>
+        {isLoadingData && urls.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-500 dark:text-slate-400">
+            <Loader2 className="w-6 h-6 text-cyan-500 animate-spin" />
+            <p className="text-xs">{t.loadingInstances}</p>
           </div>
         ) : (
-          <div className="grid gap-3">
-            {filteredUrls.map((item) => (
-              <UrlCard
-                key={item.id}
-                item={item}
-                pingResult={pingResults[item.id]}
-                onConnect={handleConnect}
-                onEdit={handleOpenEdit}
-                onDelete={handleDelete}
-                onPingSingle={handlePingSingle}
-                currentLang={currentLang}
-              />
-            ))}
-          </div>
+          <>
+            {/* Telemetry & Search Toolbar */}
+            <Toolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onPingAll={() => handlePingAll()}
+              isPingingAll={isPingingAll}
+              lastCheckedTime={lastCheckedTime}
+              urls={urls}
+              pingResults={pingResults}
+              currentLang={currentLang}
+            />
+
+            {/* Server Endpoint Grid / List */}
+            {filteredUrls.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-10 text-center shadow-xs">
+                <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto mb-3 shadow-xs">
+                  <Server className="w-6 h-6 stroke-[1.8]" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 tracking-wider uppercase">
+                  {searchQuery ? t.noSearchMatch : t.noServersTitle}
+                </h3>
+                <p className="text-slate-500 dark:text-slate-400 text-xs max-w-md mx-auto mb-5 leading-relaxed">
+                  {searchQuery
+                    ? `${t.noSearchMatch}: "${searchQuery}"`
+                    : t.noServersDesc}
+                </p>
+                <div className="flex items-center justify-center">
+                  <button
+                    onClick={handleOpenAdd}
+                    className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>{t.addFirstServer}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {filteredUrls.map((item) => (
+                  <UrlCard
+                    key={item.id}
+                    item={item}
+                    pingResult={pingResults[item.id]}
+                    onConnect={handleConnect}
+                    onEdit={handleOpenEdit}
+                    onDelete={handleDelete}
+                    onPingSingle={handlePingSingle}
+                    currentLang={currentLang}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
       {/* Terminal Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-950/80 py-3 px-4 text-center text-[11px] text-slate-500">
         <p className="font-mono">
-          HERMES.UI CONSOLE · AUTONOMOUS AGENT SUITE
+          HERMES.UI CONSOLE · AUTHENTICATED ACCESS
         </p>
       </footer>
 

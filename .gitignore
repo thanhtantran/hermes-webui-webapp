@@ -83,6 +83,10 @@ android-sdk/
 .env
 .env.*
 *.env
+!.env.example
 credentials.json
 *.key
 .credentials
+
+# Authenticated console runtime data
+data/
