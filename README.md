@@ -24,11 +24,10 @@ is stored in a SQLite database on the console server.
   headers.
 - **Health monitoring** — server-side HEAD/GET probes, per-instance latency,
   periodic sweeps, and manual "ping all".
-- **Embedded viewer** — the built-in proxy strips `X-Frame-Options`/CSP frame
-  restrictions, rewrites HTML, and isolates target cookies from the console
-  session.
-- **JSON backup** — export/import instance endpoints (passwords are never
-  exported).
+- **Direct launch** — connect opens the Hermes instance in a full browser tab;
+  the secondary action opens it in a new window sized to 50% of the screen.
+- **JSON backup** — save the instance registry to a `.json` file and restore it
+  by choosing that file; passwords are never exported.
 - **English / Vietnamese UI** and light/dark themes.
 
 ## Requirements
@@ -126,14 +125,13 @@ private deployment.
 
 ### Known limitations
 
-- WebSocket upgrades are not proxied. Hermes features that rely on WebSockets
-  may not work inside the embedded viewer; open the instance directly instead.
-- Proxied pages are served from the console origin. A malicious or compromised
-  Hermes instance could therefore run scripts with that origin's privileges.
-  Only register instances you trust; for stronger isolation, host the console
-  and the proxy on separate origins.
-- The embedded viewer is best-effort. Some sites depend on features that cannot
-  be proxied safely; use **Open directly** when that happens.
+- WebSocket upgrades are not proxied by the optional server proxy. Instances are
+  launched directly in the browser, so Hermes WebSocket features work normally.
+- If you call the optional `/api/proxy` endpoint, proxied pages are served from
+  the console origin. A malicious or compromised Hermes instance could therefore
+  run scripts with that origin's privileges. Only register instances you trust;
+  for stronger isolation, host the console and the proxy on separate origins.
+- The console UI opens instances directly and no longer embeds them in a frame.
 
 ## Project structure
 

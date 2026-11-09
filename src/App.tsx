@@ -3,7 +3,6 @@ import { Header } from './components/Header';
 import { Toolbar } from './components/Toolbar';
 import { UrlCard } from './components/UrlCard';
 import { UrlModal } from './components/UrlModal';
-import { WebViewScreen } from './components/WebViewScreen';
 import { BackupModal } from './components/BackupModal';
 import { LoginScreen } from './components/LoginScreen';
 import {
@@ -39,7 +38,6 @@ export default function App() {
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
 
   const [urls, setUrls] = useState<HermesURL[]>([]);
-  const [activeUrl, setActiveUrl] = useState<HermesURL | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<HermesURL | null>(null);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
@@ -105,7 +103,6 @@ export default function App() {
       setUser(null);
       setUrls([]);
       setPingResults({});
-      setActiveUrl(null);
       setIsModalOpen(false);
       setIsBackupOpen(false);
       setIsPingingAll(false);
@@ -259,7 +256,6 @@ export default function App() {
     setUrls([]);
     setPingResults({});
     setLastCheckedTime(null);
-    setActiveUrl(null);
     setIsModalOpen(false);
     setIsBackupOpen(false);
     setSearchQuery('');
@@ -309,7 +305,6 @@ export default function App() {
     try {
       const updated = await api.connectInstance(item.id);
       setUrls((prev) => prev.map((u) => (u.id === item.id ? updated : u)));
-      setActiveUrl(updated);
     } catch (err) {
       setAppError(err instanceof Error ? err.message : t.requestFailed);
     }
@@ -341,19 +336,6 @@ export default function App() {
         onAuthenticated={handleAuthenticated}
         notice={loginNotice}
         onDismissNotice={() => setLoginNotice(null)}
-      />
-    );
-  }
-
-  // If connected to a server instance, render WebView Session Screen
-  if (activeUrl) {
-    return (
-      <WebViewScreen
-        urlData={activeUrl}
-        onBack={() => setActiveUrl(null)}
-        currentLang={currentLang}
-        currentTheme={currentTheme}
-        onToggleTheme={handleToggleTheme}
       />
     );
   }

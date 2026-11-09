@@ -20,9 +20,11 @@
 - Add, edit, and delete Hermes endpoints; every query is scoped to the signed-in
   user.
 - Cards show online/offline state, latency, saved-password status, notes, and
-  quick actions (edit, delete, app window, open directly, connect).
+  quick actions (edit, delete, new window, connect).
 - Duplicate URLs per user are rejected with a clear error.
-- JSON export/import for migration; exported payloads never include passwords.
+- File-based JSON export/import for migration: save the registry as a `.json`
+  file and restore it by picking that file; exported payloads never include
+  passwords.
 
 ## Server-side credential storage
 
@@ -55,17 +57,17 @@
 - Manual single-instance refresh and "PING ALL".
 - Live online/offline counts and last-sweep timestamp.
 
-## Embedded viewer
+## Launching instances
 
-- Frame-bypass proxy strips `X-Frame-Options` and CSP frame restrictions while
-  applying `frame-ancestors 'self'`.
-- HTML rewriting injects a `<base>` tag and routes `fetch`, `XMLHttpRequest`, and
-  `EventSource` through the proxy.
-- Target cookies are prefixed per instance and scoped to `/api/proxy`; the
-  console session cookie is never forwarded.
-- Toggle between proxy mode and the direct URL; launch in a separate app window
-  or external tab.
-- Mobile, tablet, and full-window viewport modes.
+- **CONNECT** opens the Hermes instance directly in a full browser tab at its
+  registered URL.
+- **NEW WINDOW** opens the instance in a separate browser window sized to 50% of
+  the screen and centered.
+- Connecting records `lastConnectedAt` through the authenticated API.
+- The console layout itself stays responsive for mobile viewports; there is no
+  embedded frame or device-emulation mode.
+- The optional server-side frame-bypass proxy remains available at
+  `/api/proxy`, but the UI no longer uses it.
 
 ## Internationalization & theming
 

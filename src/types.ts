@@ -31,8 +31,6 @@ export interface ImportInstanceInput {
   password?: string;
 }
 
-export type ViewportMode = 'mobile' | 'tablet' | 'responsive';
-
 export type ServerStatus = 'idle' | 'checking' | 'online' | 'offline';
 
 export interface PingResult {

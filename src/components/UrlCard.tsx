@@ -177,14 +177,14 @@ export const UrlCard: React.FC<UrlCardProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const width = 430;
-              const height = 840;
-              const left = Math.max(0, Math.round((window.screen.width - width) / 2));
-              const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+              const width = Math.round(window.screen.availWidth * 0.5);
+              const height = Math.round(window.screen.availHeight * 0.5);
+              const left = Math.max(0, Math.round((window.screen.availWidth - width) / 2));
+              const top = Math.max(0, Math.round((window.screen.availHeight - height) / 2));
               window.open(
                 item.url,
                 `Hermes_${item.id}`,
-                `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`
+                `noopener,noreferrer,width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`
               );
             }}
             title={t.openAppWindowDesc}
@@ -194,13 +194,16 @@ export const UrlCard: React.FC<UrlCardProps> = ({
             <span className="font-semibold">{t.openAppWindow}</span>
           </button>
 
-          <button
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={() => onConnect(item)}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-400 active:bg-cyan-700 dark:active:bg-cyan-600 text-white dark:text-slate-950 font-mono font-bold text-xs rounded-lg shadow-xs transition-all cursor-pointer transform active:scale-98"
           >
             <span>{t.connect}</span>
             <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-          </button>
+          </a>
         </div>
       </div>
     </div>
